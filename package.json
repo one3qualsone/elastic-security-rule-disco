@@ -1,0 +1,15 @@
+{
+  "name": "elastic-security-rules",
+  "version": "1.0.0",
+  "description": "Simple rule browser for Elastic Security detection rules",
+  "private": true,
+  "scripts": {
+    "dev": "docker-compose up --build",
+    "stop": "docker-compose down",
+    "clean": "docker-compose down -v",
+    "logs": "docker-compose logs -f"
+  },
+  "keywords": ["elastic", "security", "rules", "elasticsearch"],
+  "author": "Your Name",
+  "license": "MIT"
+}

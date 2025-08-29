@@ -1,0 +1,22 @@
+{
+  "name": "rules-backend",
+  "version": "1.0.0",
+  "description": "Backend API for Elastic Security Rules",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js"
+  },
+  "dependencies": {
+    "@elastic/elasticsearch": "^8.11.0",
+    "fastify": "^4.25.2",
+    "@fastify/cors": "^8.4.2",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.6",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3"
+  }
+}
