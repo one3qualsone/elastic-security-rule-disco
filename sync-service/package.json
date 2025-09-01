@@ -5,7 +5,7 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "nodemon --exec ts-node --files src/index.ts",
-    "dev:debug": "nodemon --exec \"node --inspect=0.0.0.0:9230 -r ts-node/register --files src/index.ts\"",
+    "dev:debug": "nodemon --exec \"node --inspect=0.0.0.0:9230 -r ts-node/register src/index.ts\"",
     "build": "tsc",
     "start": "node dist/index.js",
     "test": "jest",

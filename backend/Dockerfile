@@ -9,13 +9,13 @@ RUN apk add --no-cache python3 make g++
 COPY package*.json ./
 
 # Install dependencies
-RUN npm ci
+RUN npm install -g nodemon && npm install
 
 # Copy source code
 COPY . .
 
 # Expose ports (app + debug)
-EXPOSE 8080 9229
+EXPOSE 3001 9229
 
 # Start development server with debug
 CMD ["npm", "run", "dev:debug"]
