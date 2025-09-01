@@ -14,5 +14,5 @@ COPY . .
 # Expose port
 EXPOSE 3000
 
-# Start development server
+# Start development server with hot reload
 CMD ["npm", "run", "dev"]

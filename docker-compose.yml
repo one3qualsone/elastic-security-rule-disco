@@ -1,21 +1,19 @@
-version: '3.8'
-
 services:
   # Frontend React Application
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile.dev
+      dockerfile: Dockerfile
     container_name: elastic-rule-frontend
     ports:
-      - "3000:3000"
+      - "${FRONTEND_PORT:-3000}:3000"
     volumes:
       - ./frontend:/app
       - /app/node_modules
     environment:
-      - NODE_ENV=development
+      - NODE_ENV=${NODE_ENV:-development}
       - CHOKIDAR_USEPOLLING=true
-      - REACT_APP_API_URL=http://localhost:8080/api
+      - REACT_APP_API_URL=http://localhost:${BACKEND_PORT:-3001}/api
     networks:
       - elastic-rule-network
     depends_on:
@@ -25,63 +23,55 @@ services:
   backend:
     build:
       context: ./backend
-      dockerfile: Dockerfile.dev
+      dockerfile: Dockerfile
     container_name: elastic-rule-backend
     ports:
-      - "8080:8080"
+      - "${BACKEND_PORT:-3001}:3001"
       - "9229:9229" # Debug port
     volumes:
       - ./backend:/app
       - /app/node_modules
     environment:
-      - NODE_ENV=development
-      - PORT=8080
+      - NODE_ENV=${NODE_ENV:-development}
+      - BACKEND_PORT=${BACKEND_PORT:-3001}
+      - ELASTIC_CLOUD_URL=${ELASTIC_CLOUD_URL}
+      - ELASTIC_API_KEY=${ELASTIC_API_KEY}
       - DEBUG=elastic-rule-platform:*
     env_file:
       - .env
     networks:
       - elastic-rule-network
     depends_on:
-      - sync-service
+      - redis
 
   # GitHub Synchronisation Service
   sync-service:
     build:
       context: ./sync-service
-      dockerfile: Dockerfile.dev
+      dockerfile: Dockerfile
     container_name: elastic-rule-sync
     ports:
       - "8081:8081"
+      - "9230:9230" # Debug port
     volumes:
       - ./sync-service:/app
       - /app/node_modules
     environment:
-      - NODE_ENV=development
-      - SERVICE_NAME=github-sync
+      - NODE_ENV=${NODE_ENV:-development}
+      - ELASTIC_CLOUD_URL=${ELASTIC_CLOUD_URL}
+      - ELASTIC_API_KEY=${ELASTIC_API_KEY}
+      - GITHUB_OWNER=${GITHUB_OWNER:-elastic}
+      - GITHUB_REPO=${GITHUB_REPO:-detection-rules}
+      - GITHUB_BRANCH=${GITHUB_BRANCH:-main}
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - SYNC_INTERVAL_HOURS=${SYNC_INTERVAL_HOURS:-24}
     env_file:
       - .env
     networks:
       - elastic-rule-network
     restart: unless-stopped
 
-  # Development Database (PostgreSQL) - Optional
-  # Uncomment if you decide to use PostgreSQL for metadata
-  # postgres:
-  #   image: postgres:15-alpine
-  #   container_name: elastic-rule-postgres
-  #   environment:
-  #     POSTGRES_DB: elastic_rules
-  #     POSTGRES_USER: postgres
-  #     POSTGRES_PASSWORD: postgres
-  #   ports:
-  #     - "5432:5432"
-  #   volumes:
-  #     - postgres_data:/var/lib/postgresql/data
-  #     - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql
-  #   networks:
-  #     - elastic-rule-network
-
-  # Redis for Caching (Optional)
+  # Redis for Caching
   redis:
     image: redis:7-alpine
     container_name: elastic-rule-redis
@@ -101,8 +91,7 @@ services:
     ports:
       - "80:80"
     volumes:
-      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf
-      - ./docker/nginx/sites-enabled:/etc/nginx/conf.d
+      - ./config/nginx.conf:/etc/nginx/nginx.conf
     networks:
       - elastic-rule-network
     depends_on:
@@ -116,7 +105,6 @@ networks:
     name: elastic-rule-network
 
 volumes:
-  # postgres_data: # Uncomment if using PostgreSQL
   redis_data:
     driver: local
     name: elastic-rule-redis-data
