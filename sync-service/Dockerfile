@@ -2,9 +2,6 @@ FROM node:18-alpine
 
 WORKDIR /app
 
-# Install development dependencies
-RUN apk add --no-cache python3 make g++
-
 # Copy package files
 COPY package*.json ./
 
@@ -15,7 +12,7 @@ RUN npm ci
 COPY . .
 
 # Expose ports (app + debug)
-EXPOSE 8080 9229
+EXPOSE 8081 9230
 
 # Start development server with debug
 CMD ["npm", "run", "dev:debug"]
