@@ -4,24 +4,19 @@
   "description": "Node.js backend API for Elastic Rule Intelligence Platform",
   "main": "dist/index.js",
   "scripts": {
-    "dev": "nodemon --exec ts-node --files src/index.ts",
-    "dev:debug": "nodemon --exec \"node --inspect=0.0.0.0:9229 -r ts-node/register --files src/index.ts\"",
+    "dev": "nodemon --exec ts-node src/index.ts",
+    "dev:debug": "nodemon --exec \"node --inspect=0.0.0.0:9229 -r ts-node/register src/index.ts\"",
     "build": "tsc && npm run copy-assets",
     "copy-assets": "cp -r src/assets dist/ 2>/dev/null || :",
     "start": "node dist/index.js",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "test:integration": "jest --config jest.integration.config.js",
     "lint": "eslint src --ext .ts,.js",
     "lint:fix": "eslint src --ext .ts,.js --fix",
     "type-check": "tsc --noEmit",
     "format": "prettier --write \"src/**/*.{ts,js,json}\"",
-    "clean": "rm -rf dist",
-    "db:migrate": "echo 'No database migrations needed - using Elasticsearch'",
-    "docs": "typedoc src --out docs --excludePrivate",
-    "security": "npm audit && npm run security:deps",
-    "security:deps": "npx retire --path src"
+    "clean": "rm -rf dist"
   },
   "dependencies": {
     "@elastic/elasticsearch": "^8.11.3",
@@ -59,8 +54,8 @@
     "@types/swagger-jsdoc": "^6.0.4",
     "@types/swagger-ui-express": "^4.1.6",
     "@types/uuid": "^9.0.8",
-    "@typescript-eslint/eslint-plugin": "^7.1.1",
-    "@typescript-eslint/parser": "^7.1.1",
+    "@typescript-eslint/eslint-plugin": "^6.21.0",
+    "@typescript-eslint/parser": "^6.21.0",
     "eslint": "^8.57.0",
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-prettier": "^5.1.3",
@@ -92,13 +87,11 @@
       "!src/types/**/*.ts"
     ],
     "coverageDirectory": "coverage",
-    "coverageReporters": ["text", "lcov", "html"],
-    "setupFilesAfterEnv": ["<rootDir>/tests/setup.ts"]
+    "coverageReporters": ["text", "lcov", "html"]
   },
   "nodemonConfig": {
     "watch": ["src"],
     "ext": "ts,json",
-    "ignore": ["src/**/*.spec.ts", "src/**/*.test.ts"],
-    "exec": "ts-node --files src/index.ts"
+    "ignore": ["src/**/*.spec.ts", "src/**/*.test.ts"]
   }
 }

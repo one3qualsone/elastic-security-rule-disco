@@ -4,7 +4,7 @@
   "description": "GitHub synchronisation service for Elastic detection rules",
   "main": "dist/index.js",
   "scripts": {
-    "dev": "nodemon --exec ts-node --files src/index.ts",
+    "dev": "nodemon --exec ts-node src/index.ts",
     "dev:debug": "nodemon --exec \"node --inspect=0.0.0.0:9230 -r ts-node/register src/index.ts\"",
     "build": "tsc",
     "start": "node dist/index.js",
@@ -17,15 +17,13 @@
     "format": "prettier --write \"src/**/*.{ts,js,json}\"",
     "clean": "rm -rf dist",
     "sync:manual": "ts-node src/scripts/manual-sync.ts",
-    "validate:rules": "ts-node src/scripts/validate-rules.ts",
-    "docs": "typedoc src --out docs --excludePrivate"
+    "validate:rules": "ts-node src/scripts/validate-rules.ts"
   },
   "dependencies": {
     "@elastic/elasticsearch": "^8.11.3",
     "@octokit/rest": "^20.0.2",
     "@octokit/webhooks": "^12.0.10",
     "axios": "^1.6.7",
-    "crypto": "^1.0.1",
     "dotenv": "^16.4.5",
     "express": "^4.18.3",
     "helmet": "^7.1.0",
@@ -47,8 +45,8 @@
     "@types/node": "^20.11.25",
     "@types/node-cron": "^3.0.11",
     "@types/uuid": "^9.0.8",
-    "@typescript-eslint/eslint-plugin": "^7.1.1",
-    "@typescript-eslint/parser": "^7.1.1",
+    "@typescript-eslint/eslint-plugin": "^6.21.0",
+    "@typescript-eslint/parser": "^6.21.0",
     "eslint": "^8.57.0",
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-prettier": "^5.1.3",
@@ -81,13 +79,11 @@
       "!src/scripts/**/*.ts"
     ],
     "coverageDirectory": "coverage",
-    "coverageReporters": ["text", "lcov", "html"],
-    "setupFilesAfterEnv": ["<rootDir>/tests/setup.ts"]
+    "coverageReporters": ["text", "lcov", "html"]
   },
   "nodemonConfig": {
     "watch": ["src"],
     "ext": "ts,json",
-    "ignore": ["src/**/*.spec.ts", "src/**/*.test.ts"],
-    "exec": "ts-node --files src/index.ts"
+    "ignore": ["src/**/*.spec.ts", "src/**/*.test.ts"]
   }
 }
