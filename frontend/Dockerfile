@@ -2,11 +2,11 @@ FROM node:18-alpine
 
 WORKDIR /app
 
-# Copy package files first for better layer caching
+# Copy package files
 COPY package*.json ./
 
-# Install dependencies with legacy peer deps resolution
-RUN npm install --legacy-peer-deps --silent
+# Install dependencies
+RUN npm install
 
 # Copy source code
 COPY . .
@@ -14,5 +14,5 @@ COPY . .
 # Expose port
 EXPOSE 3000
 
-# Start development server
-CMD ["npm", "start"]
+# Start Vite dev server
+CMD ["npm", "run", "dev"]

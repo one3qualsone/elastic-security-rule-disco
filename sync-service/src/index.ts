@@ -48,10 +48,11 @@ app.get('/health', async (req, res) => {
     timestamp: new Date().toISOString(),
     services: {
       sync: 'healthy',
-      github: githubClient ? 'healthy' : 'not configured',
+      github: githubClient ? 'configured' : 'not configured',
       elasticsearch: 'unknown'
     },
-    lastSync: null as string | null
+    lastSync: null as string | null,
+    note: 'Auto-sync disabled for development'
   };
 
   // Check Elasticsearch connection
@@ -83,7 +84,7 @@ app.post('/api/sync', async (req, res) => {
     console.error('❌ Sync failed:', error);
     res.status(500).json({ 
       success: false, 
-      error: 'Sync failed',
+      error: error instanceof Error ? error.message : 'Sync failed',
       timestamp: new Date().toISOString()
     });
   }
@@ -91,11 +92,12 @@ app.post('/api/sync', async (req, res) => {
 
 // Get sync status
 app.get('/api/sync/status', async (req, res) => {
-  // TODO: Get actual sync status from database/cache
   res.json({
-    lastSync: new Date().toISOString(),
+    lastSync: null,
     totalRules: 0,
-    status: 'ready'
+    status: 'ready',
+    autoSync: false,
+    message: 'Auto-sync disabled for development. Use POST /api/sync to manually sync.'
   });
 });
 
@@ -164,37 +166,17 @@ async function performSync() {
   }
 }
 
-// Schedule daily sync (at 2 AM)
-const syncInterval = process.env.SYNC_INTERVAL_HOURS || '24';
-const cronExpression = `0 2 */${syncInterval} * *`; // Every N hours at 2 AM
-
-cron.schedule(cronExpression, async () => {
-  console.log('⏰ Scheduled sync starting');
-  try {
-    await performSync();
-    console.log('✅ Scheduled sync completed');
-  } catch (error) {
-    console.error('❌ Scheduled sync failed:', error);
-  }
-});
+// Schedule disabled for development
+// const syncInterval = process.env.SYNC_INTERVAL_HOURS || '24';
+// const cronExpression = `0 2 */${syncInterval} * *`;
 
 // Start server
 app.listen(port, '0.0.0.0', () => {
   console.log(`🔄 Sync service running on http://0.0.0.0:${port}`);
   console.log(`📊 Health check: http://localhost:${port}/health`);
   console.log(`🔄 Manual sync: POST http://localhost:${port}/api/sync`);
-  console.log(`⏰ Scheduled sync: ${cronExpression}`);
+  console.log(`⚠️  Auto-sync disabled for development`);
   
-  // Perform initial sync if configured
-  if (githubClient && process.env.NODE_ENV === 'development') {
-    console.log('🚀 Performing initial sync in 10 seconds...');
-    setTimeout(async () => {
-      try {
-        await performSync();
-        console.log('✅ Initial sync completed');
-      } catch (error) {
-        console.error('❌ Initial sync failed:', error);
-      }
-    }, 10000);
-  }
+  // Disabled automatic initial sync
+  console.log('ℹ️  Use POST /api/sync to manually trigger sync when ready');
 });

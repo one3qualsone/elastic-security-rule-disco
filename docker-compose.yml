@@ -13,7 +13,7 @@ services:
     environment:
       - NODE_ENV=${NODE_ENV:-development}
       - CHOKIDAR_USEPOLLING=true
-      - REACT_APP_API_URL=http://localhost:${BACKEND_PORT:-3001}/api
+      - REACT_APP_API_URL=http://localhost:${BACKEND_PORT:-3001}
     networks:
       - elastic-rule-network
     depends_on:
@@ -43,33 +43,6 @@ services:
       - elastic-rule-network
     depends_on:
       - redis
-
-  # GitHub Synchronisation Service
-  sync-service:
-    build:
-      context: ./sync-service
-      dockerfile: Dockerfile
-    container_name: elastic-rule-sync
-    ports:
-      - "8081:8081"
-      - "9230:9230" # Debug port
-    volumes:
-      - ./sync-service:/app
-      - /app/node_modules
-    environment:
-      - NODE_ENV=${NODE_ENV:-development}
-      - ELASTIC_CLOUD_URL=${ELASTIC_CLOUD_URL}
-      - ELASTIC_API_KEY=${ELASTIC_API_KEY}
-      - GITHUB_OWNER=${GITHUB_OWNER:-elastic}
-      - GITHUB_REPO=${GITHUB_REPO:-detection-rules}
-      - GITHUB_BRANCH=${GITHUB_BRANCH:-main}
-      - GITHUB_TOKEN=${GITHUB_TOKEN}
-      - SYNC_INTERVAL_HOURS=${SYNC_INTERVAL_HOURS:-24}
-    env_file:
-      - .env
-    networks:
-      - elastic-rule-network
-    restart: unless-stopped
 
   # Redis for Caching
   redis:
