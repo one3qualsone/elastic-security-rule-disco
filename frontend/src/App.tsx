@@ -1,20 +1,6 @@
 import React, { useState } from 'react';
-import {
-  EuiProvider,
-  EuiPage,
-  EuiPageBody,
-  EuiPageSection,
-  EuiTitle,
-  EuiText,
-  EuiSpacer,
-  EuiFieldSearch,
-  EuiButton,
-  EuiCard,
-  EuiFlexGroup,
-  EuiFlexItem,
-  EuiBadge,
-  EuiLoadingSpinner
-} from '@elastic/eui';
+import axios from 'axios';
+import './App.css';
 
 interface SearchResult {
   id: string;
@@ -22,54 +8,52 @@ interface SearchResult {
   description: string;
   dataSource: string;
   severity: string;
+  confidence?: number;
+}
+
+interface SearchResponse {
+  query: string;
+  total: number;
+  results: SearchResult[];
+  timestamp: string;
 }
 
 const App: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [results, setResults] = useState<SearchResult[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSearch = async () => {
+  const handleSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!searchQuery.trim()) return;
     
     setIsLoading(true);
+    setError(null);
     
     try {
-      // TODO: Replace with actual API call
-      const response = await fetch(`/api/search?q=${encodeURIComponent(searchQuery)}`);
-      if (response.ok) {
-        const data = await response.json();
-        setResults(data.results || []);
-      } else {
-        console.error('Search failed:', response.statusText);
-        // Mock data for now
-        setResults([
-          {
-            id: '1',
-            name: 'AWS CloudTrail Suspicious Activity',
-            description: 'Detects suspicious activity in AWS CloudTrail logs',
-            dataSource: 'aws.cloudtrail',
-            severity: 'high'
-          },
-          {
-            id: '2', 
-            name: 'Windows Process Injection',
-            description: 'Detects process injection techniques on Windows',
-            dataSource: 'winlog.security',
-            severity: 'critical'
-          }
-        ]);
-      }
-    } catch (error) {
-      console.error('Search error:', error);
-      // Show mock data on error for development
+      const response = await axios.get<SearchResponse>(`/api/search?q=${encodeURIComponent(searchQuery)}`);
+      setResults(response.data.results || []);
+    } catch (err) {
+      console.error('Search error:', err);
+      setError('Failed to search for security rules. Please try again.');
+      // Show mock data for development
       setResults([
         {
-          id: '1',
-          name: 'Sample Security Rule',
-          description: 'This is a sample rule for development testing',
-          dataSource: 'sample.logs',
-          severity: 'medium'
+          id: 'mock-1',
+          name: 'Sample AWS CloudTrail Rule',
+          description: 'Detects suspicious activity in AWS CloudTrail logs for the queried integration',
+          dataSource: 'aws.cloudtrail',
+          severity: 'high',
+          confidence: 0.9
+        },
+        {
+          id: 'mock-2', 
+          name: 'Sample Network Security Rule',
+          description: 'Generic network security rule that matches your search query',
+          dataSource: 'network.traffic',
+          severity: 'medium',
+          confidence: 0.75
         }
       ]);
     } finally {
@@ -77,122 +61,115 @@ const App: React.FC = () => {
     }
   };
 
-  const getSeverityColor = (severity: string): "default" | "primary" | "success" | "accent" | "warning" | "danger" => {
+  const getSeverityColor = (severity: string): string => {
     switch (severity.toLowerCase()) {
-      case 'critical': return 'danger';
-      case 'high': return 'warning';
-      case 'medium': return 'primary';
-      case 'low': return 'success';
-      default: return 'default';
+      case 'critical': return '#dc3545';
+      case 'high': return '#fd7e14';
+      case 'medium': return '#ffc107';
+      case 'low': return '#28a745';
+      default: return '#6c757d';
     }
   };
 
+  const formatSeverity = (severity: string): string => {
+    return severity.charAt(0).toUpperCase() + severity.slice(1).toLowerCase();
+  };
+
   return (
-    <EuiProvider colorMode="light">
-      <EuiPage paddingSize="l">
-        <EuiPageBody>
-          <EuiPageSection>
-            <EuiTitle size="l">
-              <h1>🛡️ Elastic Security Rule Intelligence</h1>
-            </EuiTitle>
-            <EuiSpacer />
-            <EuiText>
-              <p>Search for data sources to discover relevant Elastic Security detection rules</p>
-            </EuiText>
-            <EuiSpacer size="l" />
+    <div className="app">
+      <header className="header">
+        <h1>🛡️ Elastic Security Rule Discovery</h1>
+        <p>Search for data sources to discover relevant Elastic Security detection rules</p>
+      </header>
 
-            {/* Search Interface */}
-            <EuiFlexGroup>
-              <EuiFlexItem>
-                <EuiFieldSearch
-                  placeholder="Search for data sources (e.g., 'aws cloudtrail', 'windows logs', 'nginx')"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onSearch={handleSearch}
-                  isClearable={true}
-                  isLoading={isLoading}
-                />
-              </EuiFlexItem>
-              <EuiFlexItem grow={false}>
-                <EuiButton 
-                  fill 
-                  onClick={handleSearch}
-                  isLoading={isLoading}
-                  disabled={!searchQuery.trim()}
-                >
-                  Search Rules
-                </EuiButton>
-              </EuiFlexItem>
-            </EuiFlexGroup>
+      <main className="main">
+        <form onSubmit={handleSearch} className="search-form">
+          <div className="search-input-group">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search for data sources (e.g., 'aws cloudtrail', 'windows logs', 'nginx')"
+              className="search-input"
+              disabled={isLoading}
+            />
+            <button 
+              type="submit" 
+              className="search-button"
+              disabled={isLoading || !searchQuery.trim()}
+            >
+              {isLoading ? '🔍 Searching...' : '🔍 Search Rules'}
+            </button>
+          </div>
+        </form>
 
-            <EuiSpacer size="l" />
+        {error && (
+          <div className="error-message">
+            ⚠️ {error}
+          </div>
+        )}
 
-            {/* Loading State */}
-            {isLoading && (
-              <EuiFlexGroup justifyContent="center">
-                <EuiFlexItem grow={false}>
-                  <EuiLoadingSpinner size="l" />
-                  <EuiSpacer size="s" />
-                  <EuiText textAlign="center">
-                    <p>Searching for relevant security rules...</p>
-                  </EuiText>
-                </EuiFlexItem>
-              </EuiFlexGroup>
-            )}
+        {isLoading && (
+          <div className="loading">
+            <div className="spinner"></div>
+            <p>Searching for relevant security rules...</p>
+          </div>
+        )}
 
-            {/* Search Results */}
-            {!isLoading && results.length > 0 && (
-              <>
-                <EuiTitle size="m">
-                  <h2>Found {results.length} relevant security rules</h2>
-                </EuiTitle>
-                <EuiSpacer />
-                <EuiFlexGroup direction="column">
-                  {results.map((rule) => (
-                    <EuiFlexItem key={rule.id}>
-                      <EuiCard
-                        title={rule.name}
-                        description={rule.description}
-                        footer={
-                          <EuiFlexGroup justifyContent="spaceBetween" alignItems="center">
-                            <EuiFlexItem grow={false}>
-                              <EuiText size="s" color="subdued">
-                                Data Source: <strong>{rule.dataSource}</strong>
-                              </EuiText>
-                            </EuiFlexItem>
-                            <EuiFlexItem grow={false}>
-                              <EuiBadge color={getSeverityColor(rule.severity)}>
-                                {rule.severity.toUpperCase()}
-                              </EuiBadge>
-                            </EuiFlexItem>
-                          </EuiFlexGroup>
-                        }
-                      />
-                    </EuiFlexItem>
-                  ))}
-                </EuiFlexGroup>
-              </>
-            )}
+        {!isLoading && results.length > 0 && (
+          <div className="results">
+            <h2>Found {results.length} relevant security rules</h2>
+            <div className="rules-grid">
+              {results.map((rule) => (
+                <div key={rule.id} className="rule-card">
+                  <h3 className="rule-title">{rule.name}</h3>
+                  <p className="rule-description">{rule.description}</p>
+                  <div className="rule-meta">
+                    <div className="data-source">
+                      <strong>Data Source:</strong> {rule.dataSource}
+                    </div>
+                    <div className="rule-badges">
+                      <span 
+                        className="severity-badge" 
+                        style={{ backgroundColor: getSeverityColor(rule.severity) }}
+                      >
+                        {formatSeverity(rule.severity)}
+                      </span>
+                      {rule.confidence && (
+                        <span className="confidence-badge">
+                          {Math.round(rule.confidence * 100)}% confidence
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
-            {/* Empty State */}
-            {!isLoading && results.length === 0 && searchQuery && (
-              <EuiText textAlign="center">
-                <p>No security rules found for "{searchQuery}". Try a different search term.</p>
-              </EuiText>
-            )}
+        {!isLoading && results.length === 0 && searchQuery && !error && (
+          <div className="empty-state">
+            <p>No security rules found for "{searchQuery}". Try a different search term.</p>
+          </div>
+        )}
 
-            {/* Welcome State */}
-            {!searchQuery && results.length === 0 && (
-              <EuiText textAlign="center" color="subdued">
-                <p>Enter a data source above to discover relevant security rules</p>
-                <EuiSpacer size="s" />
-                <p><strong>Examples:</strong> "aws cloudtrail", "windows security", "nginx access logs"</p>
-              </EuiText>
-            )}
-          </EuiPageSection>
-        </EuiPageBody>
-      </EuiPage>
-    </EuiProvider>
+        {!searchQuery && results.length === 0 && !error && (
+          <div className="welcome-state">
+            <p>Enter a data source above to discover relevant security rules</p>
+            <div className="examples">
+              <p><strong>Try searching for:</strong></p>
+              <ul>
+                <li>"aws cloudtrail" - AWS CloudTrail logs</li>
+                <li>"windows security" - Windows Security events</li>
+                <li>"nginx access" - Nginx access logs</li>
+                <li>"kubernetes audit" - Kubernetes audit logs</li>
+              </ul>
+            </div>
+          </div>
+        )}
+      </main>
+    </div>
   );
 };
 
