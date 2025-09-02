@@ -718,8 +718,11 @@ async function getAllRuleFiles(owner: string, repo: string) {
       if (Array.isArray(contents.data)) {
         for (const item of contents.data) {
           if (item.type === 'file' && item.name.endsWith('.toml') && item.download_url) {
-            allFiles.push(item);
-          } else if (item.type === 'dir' && allFiles.length < 1000) { // Limit to prevent infinite loops
+            allFiles.push({
+              ...item,
+              directory: path // Track which directory this came from
+            });
+          } else if (item.type === 'dir' && allFiles.length < 2000) { // Increased limit
             await traverseDirectory(item.path);
           }
         }
@@ -729,7 +732,18 @@ async function getAllRuleFiles(owner: string, repo: string) {
     }
   }
 
+  // Traverse both directories
+  console.log('📁 Scanning /rules/ directory...');
   await traverseDirectory('rules');
+  
+  console.log('🎯 Scanning /hunting/ directory...');
+  await traverseDirectory('hunting');
+  
+  const detectionRules = allFiles.filter(f => f.directory === 'rules').length;
+  const huntingRules = allFiles.filter(f => f.directory?.startsWith('hunting')).length;
+  
+  console.log(`📊 Found ${detectionRules} detection rules, ${huntingRules} hunting rules`);
+  
   return allFiles;
 }
 
