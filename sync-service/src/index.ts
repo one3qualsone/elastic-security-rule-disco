@@ -406,6 +406,8 @@ async function createElasticsearchIndices() {
   return RULES_INDEX;
 }
 
+// REPLACE your parseDetectionRule function with this version that fixes multiline parsing
+
 function parseDetectionRule(content: string, filename: string): DetectionRule | null {
   try {
     const lines = content.split('\n');
@@ -436,30 +438,16 @@ function parseDetectionRule(content: string, filename: string): DetectionRule | 
       
       if (!line || line.startsWith('#')) continue;
 
-      // Track sections
-      if (line === '[metadata]') {
-        inMetadataSection = true;
-        inRuleSection = false;
-        continue;
-      } else if (line === '[rule]') {
-        inMetadataSection = false;
-        inRuleSection = true;
-        continue;
-      } else if (line.startsWith('[[rule.')) {
-        inMetadataSection = false;
-        inRuleSection = false;
-        continue;
-      }
-
-      // Handle multiline strings - FIXED
-      if (line.includes('"""')) {
-        if (inMultilineString) {
+      // PRIORITY 1: Handle multiline strings first - don't change sections while in multiline
+      if (inMultilineString) {
+        if (line.includes('"""') || line.includes("'''")) {
           // End of multiline string
-          multilineBuffer += line.replace('"""', '');
+          multilineBuffer += line.replace(/"""/g, '').replace(/'''/g, '');
           inMultilineString = false;
           
           if (currentSection === 'query') {
             rule.query = multilineBuffer.trim();
+            console.log(`   Parsed multiline query: ${rule.query.substring(0, 50)}...`);
           } else if (currentSection === 'description') {
             rule.description = multilineBuffer.trim();
           } else if (currentSection === 'note') {
@@ -469,9 +457,19 @@ function parseDetectionRule(content: string, filename: string): DetectionRule | 
           multilineBuffer = '';
           currentSection = '';
         } else {
-          // Start of multiline string
+          multilineBuffer += '\n' + line;
+        }
+        continue; // Skip all other processing while in multiline string
+      }
+
+      // PRIORITY 2: Detect start of multiline strings
+      if (line.includes('"""') || line.includes("'''")) {
+        const delimiter = line.includes('"""') ? '"""' : "'''";
+        
+        if (line === delimiter) {
+          // Pure delimiter line - start multiline
           inMultilineString = true;
-          multilineBuffer = line.replace('"""', '');
+          multilineBuffer = '';
           
           // Better detection of what we're capturing
           const prevLines = lines.slice(Math.max(0, i-2), i);
@@ -480,16 +478,40 @@ function parseDetectionRule(content: string, filename: string): DetectionRule | 
           if (context.includes('query =')) currentSection = 'query';
           else if (context.includes('description =')) currentSection = 'description';
           else if (context.includes('note =')) currentSection = 'note';
+          
+          console.log(`   Starting multiline ${currentSection} at line ${i}`);
+        } else if (line.startsWith(delimiter) && line.endsWith(delimiter)) {
+          // Single line with delimiters
+          const content = line.substring(delimiter.length, line.length - delimiter.length);
+          const prevLine = i > 0 ? lines[i - 1].trim() : '';
+          
+          if (prevLine.includes('query =')) {
+            rule.query = content;
+          } else if (prevLine.includes('description =')) {
+            rule.description = content;
+          } else if (prevLine.includes('note =')) {
+            rule.note = content;
+          }
         }
         continue;
       }
 
-      if (inMultilineString) {
-        multilineBuffer += '\n' + line;
+      // PRIORITY 3: Track sections (only when not in multiline)
+      if (line === '[metadata]') {
+        inMetadataSection = true;
+        inRuleSection = false;
+        continue;
+      } else if (line === '[rule]') {
+        inMetadataSection = false;
+        inRuleSection = true;
+        continue;
+      } else if (line.startsWith('[[rule.') || line.startsWith('[rule.') || line.startsWith('[transform]')) {
+        inMetadataSection = false;
+        inRuleSection = false;
         continue;
       }
 
-      // Parse key-value pairs
+      // PRIORITY 4: Parse key-value pairs
       if (line.includes(' = ')) {
         const equalIndex = line.indexOf(' = ');
         const key = line.substring(0, equalIndex).trim();
@@ -521,13 +543,16 @@ function parseDetectionRule(content: string, filename: string): DetectionRule | 
               rule.name = cleanValue;
               break;
             case 'description':
-              if (!value.includes('"""')) rule.description = cleanValue;
+              if (!value.includes('"""') && !value.includes("'''")) rule.description = cleanValue;
               break;
             case 'query':
-              if (!value.includes('"""')) rule.query = cleanValue;
+              if (!value.includes('"""') && !value.includes("'''")) {
+                rule.query = cleanValue;
+                console.log(`   Parsed single-line query: ${cleanValue.substring(0, 50)}...`);
+              }
               break;
             case 'language':
-              rule.language = cleanValue as 'kuery' | 'lucene' | 'eql';
+              rule.language = cleanValue as 'kuery' | 'lucene' | 'eql' | 'esql';
               break;
             case 'type':
               rule.type = cleanValue;
@@ -554,14 +579,12 @@ function parseDetectionRule(content: string, filename: string): DetectionRule | 
               rule.timestampOverride = cleanValue;
               break;
             case 'note':
-              if (!value.includes('"""')) rule.note = cleanValue;
+              if (!value.includes('"""') && !value.includes("'''")) rule.note = cleanValue;
               break;
-            // ML-specific fields
             case 'machine_learning_job_id':
               machineLearningJobId = cleanValue;
               break;
             case 'anomaly_threshold':
-              // Could store this as a special field if needed
               break;
             case 'tags':
               rule.tags = parseArrayValue(value);
@@ -583,7 +606,7 @@ function parseDetectionRule(content: string, filename: string): DetectionRule | 
       }
     }
 
-    // Handle ML rules - create synthetic query from ML job ID
+    // Handle ML rules
     if (!rule.query && machineLearningJobId) {
       rule.query = `ML Job: ${machineLearningJobId}`;
       rule.type = rule.type || 'machine_learning';
@@ -595,13 +618,17 @@ function parseDetectionRule(content: string, filename: string): DetectionRule | 
       rule.requiredFields = extractFieldsFromQuery(rule.query);
     }
 
-    // Enhanced validation - ML rules don't need traditional query
+    // Enhanced validation with better debug info
     const hasName = rule.name && rule.name.length > 0;
     const hasQuery = rule.query && rule.query.length > 0;
     const isMlRule = machineLearningJobId && machineLearningJobId.length > 0;
     
     if (!hasName || (!hasQuery && !isMlRule)) {
-      console.warn(`⚠️  Skipping incomplete rule: ${filename} (missing name: ${!hasName}, missing query: ${!hasQuery}, ML job: ${machineLearningJobId || 'none'})`);
+      console.warn(`⚠️  Skipping incomplete rule: ${filename}`);
+      console.warn(`    Name: "${rule.name || 'MISSING'}"`);
+      console.warn(`    Query: "${rule.query ? rule.query.substring(0, 50) + '...' : 'MISSING'}"`);
+      console.warn(`    Type: "${rule.type || 'unknown'}"`);
+      console.warn(`    ML Job: "${machineLearningJobId || 'none'}"`);
       return null;
     }
 
@@ -747,11 +774,184 @@ async function getAllRuleFiles(owner: string, repo: string) {
   return allFiles;
 }
 
+// REPLACE your parseHuntingRule function with this simpler, more robust version
+
+function parseHuntingRule(content: string, filename: string): DetectionRule | null {
+  try {
+    const lines = content.split('\n');
+    const rule: Partial<DetectionRule> = {
+      id: filename.replace('.toml', ''),
+      ruleSource: filename,
+      lastUpdated: new Date().toISOString(),
+      enabled: true,
+      tags: ['Hunting Rule'],
+      references: [],
+      falsePositives: [],
+      threat: [],
+      requiredFields: [],
+      author: [],
+      integration: [],
+      index: [],
+      type: 'hunt',
+      severity: 'low',
+      riskScore: 21,
+      version: 1
+    };
+
+    let inHuntSection = false;
+    let inQuerySection = false;
+    let queryBuffer: string[] = [];
+    let currentMultilineQuery = '';
+    let inMultilineQuery = false;
+    let multilineDelimiter = '';
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      
+      if (!line || line.startsWith('#')) continue;
+
+      // Track hunt section
+      if (line === '[hunt]') {
+        inHuntSection = true;
+        continue;
+      }
+
+      if (!inHuntSection) continue;
+
+      // Handle query array start
+      if (line.startsWith('query = [') || line === 'query = [') {
+        inQuerySection = true;
+        queryBuffer = [];
+        continue;
+      }
+
+      // Handle end of query array
+      if (inQuerySection && line === ']') {
+        rule.query = queryBuffer.join('\n\n--- Next Query ---\n\n');
+        inQuerySection = false;
+        continue;
+      }
+
+      // Handle queries inside array
+      if (inQuerySection) {
+        if (line.startsWith("'''")) {
+          if (inMultilineQuery && multilineDelimiter === "'''") {
+            // End of ''' multiline query
+            queryBuffer.push(currentMultilineQuery.trim());
+            inMultilineQuery = false;
+            currentMultilineQuery = '';
+          } else if (line === "'''" || line.endsWith("'''")) {
+            // Start of ''' multiline query
+            inMultilineQuery = true;
+            multilineDelimiter = "'''";
+            currentMultilineQuery = line === "'''" ? '' : line.slice(3, -3);
+          } else {
+            // Single line with ''' delimiters
+            queryBuffer.push(line.slice(3, -3));
+          }
+        } else if (line.startsWith('"""')) {
+          if (inMultilineQuery && multilineDelimiter === '"""') {
+            // End of """ multiline query
+            queryBuffer.push(currentMultilineQuery.trim());
+            inMultilineQuery = false;
+            currentMultilineQuery = '';
+          } else {
+            // Start of """ multiline query
+            inMultilineQuery = true;
+            multilineDelimiter = '"""';
+            currentMultilineQuery = line === '"""' ? '' : line.slice(3, -3);
+          }
+        } else if (inMultilineQuery) {
+          // Inside multiline query
+          currentMultilineQuery += line + '\n';
+        }
+        continue;
+      }
+
+      // Parse key-value pairs in hunt section
+      if (line.includes(' = ')) {
+        const equalIndex = line.indexOf(' = ');
+        const key = line.substring(0, equalIndex).trim();
+        const value = line.substring(equalIndex + 3).trim();
+
+        // Handle simple string values
+        const cleanValue = value.replace(/^["']|["']$/g, '');
+
+        switch (key) {
+          case 'name':
+            rule.name = cleanValue;
+            break;
+          case 'description':
+            // Handle multiline descriptions
+            if (value.startsWith('"""')) {
+              let desc = '';
+              i++; // Skip opening """
+              while (i < lines.length && !lines[i].trim().endsWith('"""')) {
+                desc += lines[i] + '\n';
+                i++;
+              }
+              rule.description = desc.trim();
+            } else {
+              rule.description = cleanValue;
+            }
+            break;
+          case 'author':
+            rule.author = [cleanValue];
+            break;
+          case 'uuid':
+            rule.ruleId = cleanValue;
+            break;
+          case 'license':
+            rule.license = cleanValue;
+            break;
+          case 'integration':
+            rule.integration = parseArrayValue(value);
+            break;
+          case 'language':
+            const languages = parseArrayValue(value);
+            rule.language = languages[0]?.toLowerCase() as 'kuery' | 'lucene' | 'eql';
+            break;
+          case 'mitre':
+            const mitreIds = parseArrayValue(value);
+            rule.tags = [...(rule.tags || []), ...mitreIds.map(id => `MITRE:${id}`)];
+            break;
+          case 'notes':
+            // Add notes to description or separate field
+            const notes = parseArrayValue(value);
+            if (notes.length > 0) {
+              rule.note = notes.join('\n');
+            }
+            break;
+        }
+      }
+    }
+
+    // Validation - hunting rules should have name and query
+    if (!rule.name || !rule.query) {
+      console.warn(`⚠️  Hunting rule validation failed for ${filename}:`);
+      console.warn(`    Name: ${rule.name ? 'OK' : 'MISSING'}`);
+      console.warn(`    Query: ${rule.query ? 'OK' : 'MISSING'}`);
+      console.warn(`    Content preview: ${content.substring(0, 200)}...`);
+      return null;
+    }
+
+    console.log(`✅ Successfully parsed hunting rule: ${rule.name}`);
+    return rule as DetectionRule;
+
+  } catch (error) {
+    console.error(`❌ Failed to parse hunting rule ${filename}:`, error);
+    return null;
+  }
+}
+
+
+
 // Modified performSync to work with public repos
 async function performSync(forceFullSync: boolean = false) {
   if (!esClient) {
     throw new Error('Elasticsearch client not configured');
   }
+  
 
   const owner = process.env.GITHUB_OWNER || 'elastic';
   const repo = process.env.GITHUB_REPO || 'detection-rules';
@@ -807,7 +1007,14 @@ async function performSync(forceFullSync: boolean = false) {
           }
           
           const content = await response.text();
-          const rule = parseDetectionRule(content, file.name);
+          let rule: DetectionRule | null = null;
+
+          // Choose parser based on directory
+          if (file.directory?.startsWith('hunting')) {
+            rule = parseHuntingRule(content, file.name);
+          } else {
+            rule = parseDetectionRule(content, file.name);
+          }
           
           if (rule) {
             // Check if rule exists
